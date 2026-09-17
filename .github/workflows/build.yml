@@ -1,38 +1,59 @@
-name: Build Project EVOLVE
+name: Build Project EVOLVE Server
 
 on:
   push:
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
-          cache-dependency-path: '**/pom.xml'
 
-      - name: Build with Maven
+      - name: Find Maven project
+        id: maven
         shell: bash
         run: |
           POM="$(find . -name pom.xml -not -path '*/target/*' | head -n 1)"
+
           if [ -z "$POM" ]; then
-            echo "pom.xml not found"
+            echo "::error::pom.xml was not found."
             exit 1
           fi
-          echo "Using $POM"
-          mvn -B -f "$POM" clean package
 
-      - name: Upload JAR
+          PROJECT_DIR="$(dirname "$POM")"
+
+          echo "Using $POM"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Build Server Plugin
+        shell: bash
+        run: |
+          cd "${{ steps.maven.outputs.project_dir }}"
+          mvn -B clean package
+
+      - name: Show generated JARs
+        shell: bash
+        run: |
+          echo "=== Generated Server JARs ==="
+          find "${{ steps.maven.outputs.project_dir }}/target" \
+            -maxdepth 1 -type f -name "*.jar" -print
+
+      - name: Upload Server Plugin
         uses: actions/upload-artifact@v4
         with:
-          name: ProjectEVOLVE-v0.6.1
-          path: '**/target/project-evolve-0.6.1.jar'
+          name: Project-EVOLVE-Server
+          path: |
+            ${{ steps.maven.outputs.project_dir }}/target/*.jar
           if-no-files-found: error
